@@ -1,8 +1,10 @@
 import sys
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor, QPen
-from PyQt5.QtWidgets import QApplication, QVBoxLayout, QSlider, QMainWindow, QWidget, QLabel, QHBoxLayout, QPushButton
+from PyQt5.QtWidgets import QApplication, QVBoxLayout, QSlider, QMainWindow
+from PyQt5.QtWidgets import QWidget, QLabel, QHBoxLayout, QPushButton, QMessageBox
 from PyQt5.QtChart import QChart, QChartView, QLineSeries, QValueAxis, QSplineSeries
+import db
 
 
 class Window(QMainWindow):
@@ -11,6 +13,7 @@ class Window(QMainWindow):
         # Настройка окна
         self.setGeometry(200, 200, 800, 800)
         self.setWindowTitle("Фотон-Энергетика")
+        self.number = 0
 
         # Создание главного виджета
         self.main_widget = QWidget()
@@ -84,7 +87,8 @@ class Window(QMainWindow):
         self.people_slider.valueChanged[int].connect(self.math)
 
         self.power_slider.setRange(90, 100000)
-        self.power_slider.setPageStep(5)
+        self.power_slider.setPageStep(50)
+        self.power_slider.setSingleStep(5)
         self.power_slider.valueChanged[int].connect(lambda value: self.label_edit(value * 1000, self.power_label))
         self.power_slider.valueChanged[int].connect(self.setup_power_line)
 
@@ -117,8 +121,49 @@ class Window(QMainWindow):
         self.graph.chart.addSeries(self.power_line)
         self.power_line.attachAxis(self.graph.chart.axisY())
 
+    def analyze(self, people, power, temp, night):
+        # Вычисляем потребление энергии
+        energy_usage = (people * (1 - temp / 100)) + (night * people / 2)
+
+        # Проверяем, хватает ли мощности ТЭС
+        if energy_usage > power:
+            return 0  # Недостаточно мощности
+
+        # Вычисляем оценку эффективности
+        effectiveness = power / energy_usage
+
+        return effectiveness
+
+    def best_result(self):
+        data = db.read_all()
+        temp = {}
+        for row in data:
+            temp[row.number] = (self.analyze(
+                row.people, row.power,
+                row.temp, row.night)
+            )
+        best = max(temp.values())
+        for key, k in temp.items():
+            if k == best:
+                msgBox = QMessageBox()
+                msgBox.setIcon(QMessageBox.Information)
+                msgBox.setText(f"Лучший показатель — номер {key}")
+                msgBox.setWindowTitle("Лучшее значение")
+                msgBox.setStandardButtons(QMessageBox.Ok)
+                msgBox.exec()
+
     def setup_buttons(self):
-        pass
+        def write():
+            db.write([
+                self.number,
+                self.people_slider.value(),
+                self.power_slider.value(),
+                self.temp_slider.value(),
+                self.night_slider.value()
+            ])
+            self.number += 1
+        self.save_result_btn.clicked.connect(write)
+        self.best_result_btn.clicked.connect(self.best_result)
 
     def math(self):
         """Функция расчётов"""

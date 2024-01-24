@@ -1,2 +1,4 @@
 pyqt5
 pyqtgraph
+psycopg2
+SQLAlchemy
